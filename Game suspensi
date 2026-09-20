@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Hill Drive</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{width:100%;height:100%;overflow:hidden;background:#0a0e14;font-family:'Segoe UI',Arial,sans-serif;touch-action:none;user-select:none}
+  #gameContainer{position:relative;width:100vw;height:100vh;overflow:hidden}
+  #gameCanvas{position:absolute;top:0;left:0;display:block;background:#87CEEB}
+  #hud{position:absolute;top:0;left:0;right:0;padding:10px 14px;display:flex;justify-content:space-between;align-items:flex-start;color:#fff;z-index:5;pointer-events:none;text-shadow:0 2px 3px rgba(0,0,0,.5)}
+  .hud-box{display:flex;flex-direction:column;gap:6px}.hud-box.right{align-items:flex-end}
+  .hud-row{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700}
+  #fuelBarOuter{width:130px;height:14px;border:2px solid #fff;border-radius:8px;overflow:hidden;background:rgba(0,0,0,.35)}
+  #fuelBarInner{height:100%;width:100%;background:linear-gradient(90deg,#4CAF50,#8BC34A)}
+  .hud-right-buttons{display:flex;gap:8px;pointer-events:auto}
+  .icon-btn{width:40px;height:40px;border-radius:50%;border:2px solid rgba(255,255,255,.8);background:rgba(0,0,0,.35);color:#fff;font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+  .small-row{font-size:12px;opacity:.85;font-weight:600}
+  #controls{position:absolute;bottom:0;left:0;right:0;height:150px;display:flex;justify-content:space-between;align-items:flex-end;padding:0 20px 22px;pointer-events:none;z-index:5}
+  .ctrl-btn{pointer-events:auto;width:92px;height:92px;border-radius:50%;border:3px solid rgba(255,255,255,.85);font-size:15px;font-weight:800;color:#fff;display:flex;align-items:center;justify-content:center;-webkit-user-select:none;user-select:none;cursor:pointer;box-shadow:0 4px 10px rgba(0,0,0,.35);touch-action:none}
+  #gasBtn{background:radial-gradient(circle at 35% 30%,#4caf50,#2e7d32)}#brakeBtn{background:radial-gradient(circle at 35% 30%,#e53935,#b71c1c)}
+  .ctrl-btn.pressed{filter:brightness(1.3);transform:scale(.94)}
+  .overlay{position:absolute;inset:0;background:rgba(5,10,20,.82);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:20;text-align:center;gap:12px;padding:20px}
+  .hidden{display:none!important}.title{font-size:44px;font-weight:900;letter-spacing:2px;text-shadow:0 3px 6px rgba(0,0,0,.5)}
+  .subtitle{font-size:15px;opacity:.85;max-width:340px}.stat-line{font-size:18px;font-weight:600}
+  .big-btn{margin-top:10px;padding:14px 46px;font-size:20px;font-weight:800;color:#fff;background:linear-gradient(180deg,#43a047,#2e7d32);border:none;border-radius:40px;cursor:pointer;box-shadow:0 5px 0 #1b5e20,0 8px 14px rgba(0,0,0,.4)}
+  .big-btn:active{transform:translateY(3px);box-shadow:0 2px 0 #1b5e20}
+</style>
+</head>
+<body>
+<div id="gameContainer">
+<canvas id="gameCanvas"></canvas>
+<div id="hud">
+  <div class="hud-box">
+    <div class="hud-row"> BBM <div id="fuelBarOuter"><div id="fuelBarInner"></div></div></div>
+    <div class="hud-row">🪙 <span id="coinCount">0</span></div>
+  </div>
+  <div class="hud-box right">
+    <div class="hud-right-buttons"><div class="icon-btn" id="soundBtn">🔊</div><div class="icon-btn" id="pauseBtn">⏸</div></div>
+    <div class="hud-row">DIST: <span id="distanceVal">0</span> m</div>
+    <div class="small-row">BEST: <span id="bestVal">0</span> m</div>
+  </div>
+</div>
+<div id="controls"><div class="ctrl-btn" id="brakeBtn">◄ Ngerem</div><div class="ctrl-btn" id="gasBtn">GAS Pool ►</div></div>
+<div class="overlay" id="startScreen"><div class="title">MOBIL SUSPENSI ALA-ALA JAWIR</div><div class="subtitle">Gas terus sampek malik!</div><div class="subtitle">Tombol GAS pool / Ngerem, atau tombol panah / A D di keyboard. Tekan R untuk restart, P untuk Mandek.</div><button class="big-btn" id="playBtn">Ayo Mulai</button></div>
+<div class="overlay hidden" id="pauseScreen"><div class="title" style="font-size:34px;">Mandek</div><button class="big-btn" id="resumeBtn">Lanjutno Wir</button></div>
+<div class="overlay hidden" id="gameOverScreen"><div class="title" style="font-size:34px;">Pake Otak Kalo Nyetir Woi!!</div><div class="stat-line">Distance: <span id="finalDistance">0</span> m</div><div class="stat-line">Best: <span id="finalBest">0</span> m</div><div class="stat-line">Coins: <span id="finalCoins">0</span></div><button class="big-btn" id="playAgainBtn">Dolan Mane</button></div>
+</div>
+
+<script>
+(function(){
+'use strict';
+const canvas=document.getElementById('gameCanvas'),ctx=canvas.getContext('2d');
+let W=0,H=0;const DPR=Math.min(window.devicePixelRatio||1,2);
+function resizeCanvas(){W=innerWidth;H=innerHeight;canvas.width=W*DPR;canvas.height=H*DPR;canvas.style.width=W+'px';canvas.style.height=H+'px';ctx.setTransform(DPR,0,0,DPR,0,0)}
+addEventListener('resize',resizeCanvas);addEventListener('orientationchange',resizeCanvas);resizeCanvas();
+
+const STATE={START:'start',PLAYING:'playing',PAUSED:'paused',GAMEOVER:'GAMEOVER'};let gameState=STATE.START;
+function hash1(n){const s=Math.sin(n*127.1)*43758.5453123;return s-Math.floor(s)}
+function smooth(t){return t*t*(3-2*t)}
+function valueNoise(x){const xi=Math.floor(x),xf=x-xi,a=hash1(xi),b=hash1(xi+1);return a+(b-a)*smooth(xf)}
+function octaveNoise(x,octaves,persistence,scale){let total=0,amp=1,freq=1,maxAmp=0;for(let i=0;i<octaves;i++){total+=valueNoise(x*scale*freq)*amp;maxAmp+=amp;amp*=persistence;freq*=2.1}return total/maxAmp}
+const GROUND_BASE=380,START_FLAT_LEN=480;
+function difficultyAmplitude(x){const t=Math.min(1,Math.max(0,(x-START_FLAT_LEN)/9000));return 40+t*150}
+function terrainHeight(x){const big=octaveNoise(x,4,.5,.004)*difficultyAmplitude(x)*1.6,small=octaveNoise(x,3,.5,.02)*18,bumpy=GROUND_BASE-big-small;if(x<START_FLAT_LEN){const t=smooth(Math.max(0,x)/START_FLAT_LEN);return GROUND_BASE*(1-t)+bumpy*t}return bumpy}
+function terrainNormal(x){const d=.5,y1=terrainHeight(x-d),y2=terrainHeight(x+d),dx=d*2,dy=y2-y1,len=Math.sqrt(dx*dx+dy*dy);if(!len)return{nx:0,ny:-1};return{nx:dy/len,ny:-dx/len}}
+
+const SEG_LEN=140,collectedItems=new Set();
+function getItemAt(s){if(s<4)return null;const r=hash1(s*17.77+3.1);if(r<.32){const ox=hash1(s*31.4+1)*(SEG_LEN-40)+20,x=s*SEG_LEN+ox;return{id:'c'+s,type:'coin',x,y:terrainHeight(x)-55}}if(r<.46){const ox=hash1(s*12.9+7)*(SEG_LEN-40)+20,x=s*SEG_LEN+ox;return{id:'f'+s,type:'fuel',x,y:terrainHeight(x)-60}}return null}
+function getItemsInRange(a,b){const items=[],s0=Math.floor(a/SEG_LEN)-1,s1=Math.floor(b/SEG_LEN)+1;for(let s=s0;s<=s1;s++){const it=getItemAt(s);if(it&&!collectedItems.has(it.id))items.push(it)}return items}
+
+const MAX_PARTICLES=100,particles=[];for(let i=0;i<MAX_PARTICLES;i++)particles.push({active:false,x:0,y:0,vx:0,vy:0,life:0,maxLife:1,r:1});
+function spawnDust(x,y,dir){for(let i=0;i<2;i++){let p=particles.find(q=>!q.active);if(!p)return;p.active=true;p.x=x;p.y=y;p.vx=(Math.random()-.5)*60-dir*40;p.vy=-Math.random()*60-20;p.maxLife=p.life=.4+Math.random()*.3;p.r=2+Math.random()*2.5}}
+function updateParticles(dt){for(const p of particles){if(!p.active)continue;p.life-=dt;if(p.life<=0){p.active=false;continue}p.vy+=240*dt;p.x+=p.vx*dt;p.y+=p.vy*dt}}
+function drawParticles(){for(const p of particles){if(!p.active)continue;const a=Math.max(0,p.life/p.maxLife);ctx.beginPath();ctx.fillStyle='rgba(196,168,120,'+(a*.6)+')';ctx.arc(p.x-camera.x,p.y-camera.y,p.r,0,Math.PI*2);ctx.fill()}}
+
+const PHYSICS={
+  gravity:1600,mass:1,
+  engineForce:720,brakeForce:900,maxSpeed:620,reverseMax:-220,
+  rollingResistance:140,traction:.92,
+  airControlTorque:3.2,maxAngularVelocity:3.4,airAngularDamping:.99,groundAngularDamping:.55,
+  wheelRadius:17,wheelBase:68,
+  // Real per-wheel spring-damper suspension. Rest length matches the car's
+  // original visual wheel offset so the body doesn't suddenly look taller.
+  suspensionRestLength:22,suspensionMaxCompression:14,suspensionMaxExtension:28,
+  suspensionStrength:2600,suspensionDamping:160,
+  // Airborne feel + single-wheel grip while landing/taking off.
+  airResistance:.15,landingDamping:.35,wheelGrip:.6,
+  fuelConsumption:9
+};
+const momentOfInertia=PHYSICS.mass*PHYSICS.wheelBase**2/12;
+const SUS_REST=PHYSICS.suspensionRestLength,SUS_ANCHOR_Y=18-SUS_REST;
+const car={x:120,y:0,vx:0,vy:0,angle:0,angularVel:0,wheels:[{offset:-34,radius:17,springLen:SUS_REST,prevSpringLen:SUS_REST,rotation:0,onGround:false,groundContactX:0,groundContactY:0,normal:{nx:0,ny:-1}},{offset:34,radius:17,springLen:SUS_REST,prevSpringLen:SUS_REST,rotation:0,onGround:false,groundContactX:0,groundContactY:0,normal:{nx:0,ny:-1}}],upsideDownTimer:0};
+const MAX_FUEL=100;
+let fuel=100,coins=0,distanceM=0,bestDistanceM=parseFloat(localStorage.getItem('hillDrive_best')||'0')||0;
+let debugMode=false;
+addEventListener('keydown',e=>{if(e.key==='F3'){e.preventDefault();debugMode=!debugMode}});
+const input={gas:false,brake:false};
+const camera={x:0,y:0};
+
+function resetCar(){car.x=120;car.y=terrainHeight(120)-42;car.vx=car.vy=car.angularVel=car.angle=0;car.wheels.forEach(w=>{w.springLen=SUS_REST;w.prevSpringLen=SUS_REST;w.rotation=0;w.onGround=false});car.upsideDownTimer=0;fuel=100;coins=0;distanceM=0;collectedItems.clear();camera.x=car.x-W*.35;camera.y=car.y-H*.5}
+function getWorldPos(bx,by,a,lx,ly=0){const c=Math.cos(a),s=Math.sin(a);return{x:bx+lx*c-ly*s,y:by+lx*s+ly*c}}
+function updateCarPhysics(dt){
+  const STEPS=4, sd=Math.min(dt,0.033)/STEPS;
+  const minLen=Math.max(2,PHYSICS.suspensionRestLength-PHYSICS.suspensionMaxCompression);
+  const maxLen=PHYSICS.suspensionRestLength+PHYSICS.suspensionMaxExtension;
+
+  for(let step=0;step<STEPS;step++){
+
+    // Gravity always applies — nothing below ever overrides car.y directly.
+    car.vy += PHYSICS.gravity*sd;
+
+    // Per-wheel suspension raycast. The anchor point is fixed to the chassis
+    // and rotates with it; the spring only ever PUSHES (never pulls), so a
+    // wheel that is not within its travel range contributes zero force and
+    // the vehicle is free to fly under pure gravity + momentum.
+    let groundedWheels=0, netForceY=0, netTorque=0, firstContact=null;
+
+    for(const w of car.wheels){
+      const anchor=getWorldPos(car.x,car.y,car.angle,w.offset,SUS_ANCHOR_Y);
+      const gy=terrainHeight(anchor.x);
+      const rayLen=gy-anchor.y;
+      const desiredLen=rayLen-w.radius;
+
+      if(!Number.isFinite(desiredLen) || desiredLen>maxLen){
+        // Ground is out of suspension reach: wheel is airborne, no force.
+        w.onGround=false;
+        w.prevSpringLen=w.springLen;
+        w.springLen=maxLen;
+        continue;
+      }
+
+      w.onGround=true;
+      groundedWheels++;
+      const springLen=Math.max(minLen,Math.min(maxLen,desiredLen));
+      const compression=PHYSICS.suspensionRestLength-springLen; // >0 = compressed
+      const compressionVel=(w.springLen-springLen)/sd;
+      w.prevSpringLen=w.springLen;
+      w.springLen=springLen;
+      w.groundContactX=anchor.x;
+      w.groundContactY=gy;
+      w.normal=terrainNormal(anchor.x);
+      if(!firstContact) firstContact=w;
+
+      // Spring-damper force, clamped so it can only push the chassis away
+      // from the ground, never pull it down while extending.
+      const forceMag=Math.max(0,compression*PHYSICS.suspensionStrength+compressionVel*PHYSICS.suspensionDamping);
+      netForceY+=-forceMag;           // upward push on the chassis
+      netTorque+=-forceMag*w.offset;  // and the matching rotational effect
+    }
+
+    if(groundedWheels>0){
+      // Hard landing absorbs a slice of vertical velocity (squash), softer
+      // contact barely touches it — this is what makes hard vs soft landing
+      // feel different instead of every touch behaving identically.
+      if(car.vy>260) car.vy -= car.vy*PHYSICS.landingDamping*Math.min(1,sd*30);
+
+      car.vy += (netForceY/PHYSICS.mass)*sd;
+      car.angularVel += (netTorque/momentOfInertia)*sd;
+      // Bleeds off oscillatory energy from the coupled wheel springs so the
+      // chassis settles instead of resonating — it damps angular VELOCITY
+      // only, never pulls the angle itself toward the terrain.
+      car.angularVel *= Math.pow(PHYSICS.groundAngularDamping,sd*60);
+
+      // Engine / brake — full grip with both wheels down, reduced grip with
+      // only one wheel touching (e.g. just landing or about to take off).
+      const gripScale=groundedWheels>=2?1:PHYSICS.wheelGrip;
+      if(input.gas && fuel>0){
+        car.vx += PHYSICS.engineForce*gripScale*sd;
+        fuel=Math.max(0,fuel-PHYSICS.fuelConsumption*sd);
+      }else if(input.brake){
+        car.vx -= PHYSICS.brakeForce*gripScale*sd;
+      }else{
+        car.vx *= Math.max(0,1-PHYSICS.rollingResistance*0.006*sd);
+      }
+
+      // Slope pulls the car along it, but only counted with solid 2-wheel
+      // contact so a single grounded wheel doesn't yank the chassis sideways.
+      if(groundedWheels>=2){
+        const rear=terrainHeight(car.x-PHYSICS.wheelBase/2);
+        const front=terrainHeight(car.x+PHYSICS.wheelBase/2);
+        car.vx += Math.sin(Math.atan2(front-rear,PHYSICS.wheelBase))*55*sd;
+      }
+
+      if(Math.abs(car.vx)>70 && firstContact && Math.random()<0.22){
+        spawnDust(firstContact.groundContactX,firstContact.groundContactY,Math.sign(car.vx)||1);
+      }
+    }else{
+      // Fully airborne: gravity + light air resistance + player-controlled
+      // rotation. Horizontal momentum is never touched here.
+      car.vy *= Math.max(0,1-PHYSICS.airResistance*sd);
+      if(input.gas) car.angularVel += PHYSICS.airControlTorque*sd;
+      if(input.brake) car.angularVel -= PHYSICS.airControlTorque*sd;
+      car.angularVel *= Math.pow(PHYSICS.airAngularDamping,sd*60);
+    }
+
+    car.angularVel=Math.max(-PHYSICS.maxAngularVelocity,Math.min(PHYSICS.maxAngularVelocity,car.angularVel));
+    car.vy=Math.max(-2400,Math.min(2400,car.vy));
+    car.vx=Math.max(PHYSICS.reverseMax,Math.min(PHYSICS.maxSpeed,car.vx));
+
+    car.x += car.vx*sd;
+    car.y += car.vy*sd;
+    car.angle += car.angularVel*sd;
+
+    if(!Number.isFinite(car.x)||!Number.isFinite(car.y)||!Number.isFinite(car.angle)){
+      // Safety net: never let a stray NaN/Infinity propagate into render.
+      car.x=Number.isFinite(car.x)?car.x:120;
+      car.y=Number.isFinite(car.y)?car.y:terrainHeight(car.x)-42;
+      car.angle=Number.isFinite(car.angle)?car.angle:0;
+      car.vx=car.vy=car.angularVel=0;
+    }
+
+    for(const w of car.wheels){
+      w.rotation += (car.vx/w.radius)*sd;
+    }
+  }
+
+  // Distance.
+  distanceM=Math.max(distanceM,(car.x-120)/12);
+
+  // Pickup collision is deliberately handled once per frame.
+  checkItemCollisions();
+
+  // Game-over logic: only a sustained upside-down state or a real fall.
+  const a=((car.angle%(Math.PI*2))+Math.PI*2)%(Math.PI*2);
+  const upside=a>Math.PI*0.58 && a<Math.PI*1.42;
+
+  if(upside) car.upsideDownTimer+=dt;
+  else car.upsideDownTimer=Math.max(0,car.upsideDownTimer-dt*2);
+
+  if(car.upsideDownTimer>2.0){
+    triggerGameOver();
+    return;
+  }
+
+  if(car.y-terrainHeight(car.x)>700){
+    triggerGameOver();
+    return;
+  }
+}
+function checkItemCollisions(){
+  const items=getItemsInRange(car.x-70,car.x+70);
+  for(const it of items){
+    if(!it || !Number.isFinite(it.x) || !Number.isFinite(it.y)) continue;
+    if(collectedItems.has(it.id)) continue;
+
+    const dx=it.x-car.x;
+    const dy=it.y-car.y;
+
+    if(dx*dx+dy*dy<44*44){
+      collectedItems.add(it.id);
+
+      if(it.type==='coin'){
+        coins+=10;
+      }else if(it.type==='fuel'){
+        fuel=Math.min(MAX_FUEL,fuel+35);
+      }
+
+      break; // maksimal satu pickup diproses per frame
+    }
+  }
+}
+
+function drawBackground(){const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,'#62b7ed');g.addColorStop(1,'#d8f1ff');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);ctx.fillStyle='rgba(255,255,255,.75)';for(let i=0;i<5;i++){const x=((i*260-camera.x*.08)%(W+260)+W+260)%(W+260)-100,y=70+(i%3)*55;ctx.beginPath();ctx.arc(x,y,25,0,7);ctx.arc(x+30,y+4,32,0,7);ctx.arc(x+60,y,22,0,7);ctx.fill()}}
+function drawTerrain(){const sx=Math.floor(camera.x)-40,ex=Math.ceil(camera.x+W)+40;ctx.beginPath();ctx.moveTo(sx-camera.x,H);for(let x=sx;x<=ex;x+=8)ctx.lineTo(x-camera.x,terrainHeight(x)-camera.y);ctx.lineTo(ex-camera.x,H);ctx.closePath();ctx.fillStyle='#6d9b45';ctx.fill();ctx.beginPath();for(let x=sx;x<=ex;x+=8){const y=terrainHeight(x)-camera.y;if(x===sx)ctx.moveTo(x-camera.x,y);else ctx.lineTo(x-camera.x,y)}ctx.strokeStyle='#3e652b';ctx.lineWidth=4;ctx.stroke()}
+function drawItems(){
+  const items=getItemsInRange(camera.x-100,camera.x+W+100);
+
+  for(const it of items){
+    if(!it || !Number.isFinite(it.x)) continue;
+
+    // Always recompute vertical placement from terrain so pickups never float.
+    const ground=terrainHeight(it.x);
+    const x=it.x-camera.x;
+    const y=ground-camera.y-(it.type==='coin'?48:52);
+
+    ctx.save();
+    ctx.translate(x,y);
+
+    if(it.type==='coin'){
+      ctx.shadowColor='rgba(0,0,0,.25)';
+      ctx.shadowBlur=5;
+      ctx.fillStyle='#ffd54a';
+      ctx.beginPath();
+      ctx.arc(0,0,11,0,Math.PI*2);
+      ctx.fill();
+      ctx.shadowBlur=0;
+      ctx.strokeStyle='#b8860b';
+      ctx.lineWidth=2;
+      ctx.stroke();
+
+      ctx.fillStyle='#fff4a3';
+      ctx.font='bold 13px Arial';
+      ctx.textAlign='center';
+      ctx.fillText('$',0,5);
+    }else{
+      // Fuel can: clearly recognizable, no floating box.
+      ctx.fillStyle='#d32f2f';
+      ctx.fillRect(-10,-13,20,26);
+      ctx.fillStyle='#eeeeee';
+      ctx.fillRect(-3,-9,6,18);
+      ctx.fillStyle='#212121';
+      ctx.fillRect(-5,-17,10,5);
+    }
+
+    ctx.restore();
+  }
+}
+function drawCar(){ctx.save();const x=car.x-camera.x,y=car.y-camera.y;ctx.translate(x,y);ctx.rotate(car.angle);ctx.fillStyle='#333';ctx.fillRect(-43,-22,86,25);ctx.fillStyle='#d84343';ctx.fillRect(-36,-35,48,18);ctx.fillStyle='#8fd3ff';ctx.fillRect(-22,-32,18,13);ctx.fillRect(0,-32,18,13);for(const w of car.wheels){ctx.save();ctx.translate(w.offset,SUS_ANCHOR_Y+w.springLen);ctx.rotate(w.rotation);ctx.fillStyle='#202020';ctx.beginPath();ctx.arc(0,0,w.radius,0,7);ctx.fill();ctx.fillStyle='#aaa';ctx.beginPath();ctx.arc(0,0,7,0,7);ctx.fill();ctx.restore()}ctx.restore()}
+function draw(){drawBackground();drawTerrain();drawItems();drawParticles();drawCar();if(debugMode){ctx.fillStyle='#fff';ctx.font='12px monospace';ctx.fillText('x:'+car.x.toFixed(1)+' y:'+car.y.toFixed(1)+' vx:'+car.vx.toFixed(1),10,H-10)}}
+
+function updateHUD(){document.getElementById('fuelBarInner').style.width=fuel+'%';document.getElementById('coinCount').textContent=coins;document.getElementById('distanceVal').textContent=Math.floor(distanceM);document.getElementById('bestVal').textContent=Math.floor(bestDistanceM)}
+function triggerGameOver(){if(gameState===STATE.GAMEOVER)return;gameState=STATE.GAMEOVER;if(distanceM>bestDistanceM){bestDistanceM=distanceM;try{localStorage.setItem('hillDrive_best',bestDistanceM)}catch(e){}}document.getElementById('finalDistance').textContent=Math.floor(distanceM);document.getElementById('finalBest').textContent=Math.floor(bestDistanceM);document.getElementById('finalCoins').textContent=coins;document.getElementById('gameOverScreen').classList.remove('hidden');updateHUD()}
+function startGame(){resetCar();gameState=STATE.PLAYING;document.getElementById('startScreen').classList.add('hidden');document.getElementById('pauseScreen').classList.add('hidden');document.getElementById('gameOverScreen').classList.add('hidden')}
+function togglePause(){if(gameState===STATE.PLAYING){gameState=STATE.PAUSED;document.getElementById('pauseScreen').classList.remove('hidden')}else if(gameState===STATE.PAUSED){gameState=STATE.PLAYING;document.getElementById('pauseScreen').classList.add('hidden')}}
+
+function bindHold(el,key){const down=e=>{e.preventDefault();input[key]=true;el.classList.add('pressed')},up=e=>{e.preventDefault();input[key]=false;el.classList.rem
