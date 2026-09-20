@@ -25,12 +25,12 @@ Game balap mobil bergaya *hill climb* yang dibangun dengan **HTML5 & JavaScript*
 | --- | --- |
 | `→ / D` | Gas / maju |
 | `← / A` | Rem / mundur |
-| `Space` | (opsional, isi sesuai fungsi di game-mu) |
+
 
 **Touch (mobile)**
 
-- Tap tombol gas di layar untuk maju
-- Tap tombol rem di layar untuk mundur/rem
+- Tap tombol gas pool di layar untuk maju
+- Tap tombol ngerem di layar untuk mundur/rem
 
 ## 🛠️ Teknologi
 
